@@ -122,7 +122,14 @@ class AnimationWorker(QThread):
         self.frames = frames
         self.output_path = output_path
         self.interpolation = interpolation
+        self._anim_params = {}
     
+    def set_params(self,shape_start,shape_end,joint_configs):
+        self._anim_params = {
+            'shape_start':shape_start,
+            'shape_end':shape_end,
+            'joints':joint_configs
+        }
     def run(self):
         try:
             Path(self.output_path).mkdir(parents=True, exist_ok=True)
