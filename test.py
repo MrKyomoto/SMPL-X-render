@@ -9,14 +9,13 @@ SMPL-X 3D人体动画控制与动画生成系统 - 视角增强版
 """
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QSlider, QLabel, QGroupBox, QGridLayout,
     QSpinBox, QLineEdit, QProgressBar, QMessageBox,
     QTabWidget, QFormLayout, QCheckBox, QScrollArea, QComboBox,
-    QFrame, QTextEdit, QDialog, QListWidget, QListWidgetItem,
+    QFrame, QTextEdit, QListWidget, QListWidgetItem,
     QInputDialog, QRadioButton, QButtonGroup
 )
 from matplotlib.figure import Figure
@@ -48,47 +47,42 @@ pose_params = torch.zeros(1, 156, device=device)
 # ====================== 视角相关全局变量 ======================
 current_view_elev = 20
 current_view_azim = 45
-current_view_dist = None  # 自动计算
-saved_views = {}  # 视角保存字典
+current_view_dist = None
+saved_views = {}
 
 # ====================== SMPLX关节字典 + 对应旋转轴 + 精准索引 ======================
 SMPLX_JOINTS = {
-    "pelvis": 0,           # 骨盆（根关节，不动）
-    "left_hip": 1,         # 左髋关节 | 旋转轴:Z
-    "right_hip": 2,        # 右髋关节 | 旋转轴:Z
-    "spine1": 3,           # 脊柱1【腰腹核心】 | 旋转轴:Y
-    "left_knee": 4,        # 左膝关节 | 旋转轴:Z
-    "right_knee": 5,       # 右膝关节 | 旋转轴:Z
-    "spine2": 6,           # 脊柱2【胸椎】 | 旋转轴:Y
-    "left_ankle": 7,       # 左脚踝 | 旋转轴:Z
-    "right_ankle": 8,      # 右脚踝 | 旋转轴:Z
-    "spine3": 9,           # 脊柱3【颈椎】 | 旋转轴:Y
-    "left_foot": 10,       # 左脚掌 | 旋转轴:Z
-    "right_foot": 11,      # 右脚掌 | 旋转轴:Z
-    "neck": 12,            # 脖子 | 旋转轴:Y
-    "left_collar": 13,     # 左锁骨 | 旋转轴:X
-    "right_collar": 14,    # 右锁骨 | 旋转轴:X
-    "head": 15,            # 头部 | 旋转轴:Y
-    "left_shoulder": 16,   # 左肩 | 旋转轴:X
-    "right_shoulder": 17,  # 右肩 | 旋转轴:X
-    "left_elbow": 18,      # 左肘 | 旋转轴:X
-    "right_elbow": 19,     # 右肘 | 旋转轴:X
-    "left_wrist": 20,      # 左手腕 | 旋转轴:X
-    "right_wrist": 21,     # 右手腕 | 旋转轴:X
+    "pelvis": 0,
+    "left_hip": 1,
+    "right_hip": 2,
+    "spine1": 3,
+    "left_knee": 4,
+    "right_knee": 5,
+    "spine2": 6,
+    "left_ankle": 7,
+    "right_ankle": 8,
+    "spine3": 9,
+    "left_foot": 10,
+    "right_foot": 11,
+    "neck": 12,
+    "left_collar": 13,
+    "right_collar": 14,
+    "head": 15,
+    "left_shoulder": 16,
+    "right_shoulder": 17,
+    "left_elbow": 18,
+    "right_elbow": 19,
+    "left_wrist": 20,
+    "right_wrist": 21,
 }
 
-# 每个关节对应的「核心运动轴」 0=X,1=Y,2=Z
 JOINT_AXIS_MAP = {
-    'global': 1,           # 全局只动Y轴 → 水平旋转
-    # 下肢关节 - 全部核心轴=2(Z轴)
-    1: 2, 2: 2, 4: 2, 5: 2, 7: 2, 8: 2, 10:2, 11:2,
-    # 躯干关节 - 全部核心轴=1(Y轴)
-    3: 1, 6: 1, 9: 1, 12:1, 15:1,
-    # 上肢关节 - 全部核心轴=0(X轴)
-    13:0,14:0,16:0,17:0,18:0,19:0,20:0,21:0
+    'global': 1,
+    1: 2, 2: 2, 4: 2, 5: 2, 7: 2, 8: 2, 10: 2, 11: 2,
+    3: 1, 6: 1, 9: 1, 12: 1, 15: 1,
+    13: 0, 14: 0, 16: 0, 17: 0, 18: 0, 19: 0, 20: 0, 21: 0
 }
 
-# ====================== 部位聚焦映射 ======================
 FOCUS_PARTS = {
     "头部": {"joint_idx": 15, "default_elev": 20, "default_azim": 0, "zoom": 2.5},
     "颈部": {"joint_idx": 12, "default_elev": 15, "default_azim": 0, "zoom": 2.5},
@@ -106,7 +100,6 @@ FOCUS_PARTS = {
 
 GLOBAL_ROTATION = 'global'
 
-# ====================== 视角预设配置 ======================
 VIEW_PRESETS = {
     "正前": {"elev": 0, "azim": 0, "desc": "正面视角"},
     "正后": {"elev": 0, "azim": 180, "desc": "背面视角"},
@@ -116,6 +109,7 @@ VIEW_PRESETS = {
     "俯视": {"elev": -90, "azim": 0, "desc": "底部视角"},
     "侧视": {"elev": 20, "azim": 45, "desc": "标准侧视角"},
 }
+
 
 # ====================== 动画生成线程（增强版）======================
 class AnimationWorker(QThread):
@@ -127,7 +121,7 @@ class AnimationWorker(QThread):
         super().__init__(parent)
         self.frames = frames
         self.output_path = output_path
-        self.interpolation = interpolation  # "linear" 或 "smooth"
+        self.interpolation = interpolation
     
     def run(self):
         try:
@@ -141,9 +135,7 @@ class AnimationWorker(QThread):
             shape_end = params.get('shape_end', 0)
             joint_configs = params.get('joints', [])
             
-            # 动画插值函数选择
             if self.interpolation == "smooth":
-                # 三次平滑插值
                 t_points = np.array([0, 0.5, 1])
                 def smooth_interpolate(start, end, t):
                     if abs(end - start) < 0.01:
@@ -152,7 +144,6 @@ class AnimationWorker(QThread):
                     f = interp1d(t_points, v_points, kind='quadratic')
                     return float(f(t))
             else:
-                # 线性插值
                 def smooth_interpolate(start, end, t):
                     return start + (end - start) * t
             
@@ -161,19 +152,16 @@ class AnimationWorker(QThread):
                 current_shape = torch.zeros(1, 10, device=device)
                 current_pose = torch.zeros(1, 156, device=device)
                 
-                # 体型插值
                 if self.interpolation == "smooth":
                     current_shape[0, 0] = smooth_interpolate(shape_start, shape_end, t)
                 else:
                     current_shape[0, 0] = shape_start + (shape_end - shape_start) * t
                 
-                # 关节插值 - 3维度映射+对应旋转轴
                 for joint_info in joint_configs:
                     idx = joint_info['idx']
                     start_val = joint_info['start_val']
                     end_val = joint_info['end_val']
                     
-                    # 角度插值
                     if self.interpolation == "smooth":
                         current_rad = smooth_interpolate(
                             start_val * np.pi / 180, 
@@ -231,7 +219,6 @@ class AnimationWorker(QThread):
             ax.set_zlabel("Z")
             ax.set_title(f"Frame {frame_idx + 1}")
             
-            # 使用当前视角设置
             global current_view_elev, current_view_azim
             ax.view_init(elev=current_view_elev, azim=current_view_azim)
             
@@ -261,6 +248,7 @@ class AnimationWorker(QThread):
         except Exception as e:
             print(f"渲染帧 {frame_idx} 失败: {e}")
 
+
 # ====================== 主窗口类 ======================
 class HumanAnimationSystem(QMainWindow):
     def __init__(self):
@@ -270,35 +258,31 @@ class HumanAnimationSystem(QMainWindow):
         self.setMinimumSize(1100, 750)
         self.generate_btn = None
         self.animation_thread = None
-        self.focus_btn_group = None  # 部位聚焦按钮组
-        self.view_saved_count = 0  # 保存视角计数
+        self.focus_btn_group = None
+        self.view_saved_count = 0
         
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
         main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # ====================== 左侧3D视图区域 ======================
         left_container = QWidget()
         left_layout = QVBoxLayout(left_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(2)
         
-        # 3D画布
         self.fig = plt.figure(figsize=(10, 8))
         self.ax = self.fig.add_subplot(111, projection='3d')
         self._init_axes()
         self.canvas = FigureCanvas(self.fig)
-        self.canvas.mpl_connect('button_press_event', self._on_canvas_click)  # 点击事件
+        self.canvas.mpl_connect('button_press_event', self._on_canvas_click)
         left_layout.addWidget(self.canvas, 7)
         
-        # 视角状态显示
         self.view_status_label = QLabel("视角: 侧视 (elev=20°, azim=45°)")
         self.view_status_label.setAlignment(Qt.AlignCenter)
         self.view_status_label.setStyleSheet("QLabel { background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px; }")
         left_layout.addWidget(self.view_status_label)
         
-        # 手动视角调整滑条
         view_ctrl_group = QGroupBox("手动视角调整")
         view_ctrl_layout = QHBoxLayout(view_ctrl_group)
         view_ctrl_layout.setContentsMargins(5, 5, 5, 5)
@@ -329,13 +313,11 @@ class HumanAnimationSystem(QMainWindow):
         
         left_layout.addWidget(view_ctrl_group)
         
-        # 状态标签
         self.status_label = QLabel("状态: 等待加载模型")
         self.status_label.setAlignment(Qt.AlignCenter)
         left_layout.addWidget(self.status_label, 0)
         main_layout.addWidget(left_container, 6)
         
-        # ====================== 右侧控制面板 ======================
         right_scroll = QScrollArea()
         right_scroll.setWidgetResizable(True)
         right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -346,25 +328,20 @@ class HumanAnimationSystem(QMainWindow):
         right_layout.setContentsMargins(10, 10, 10, 10)
         right_layout.setSpacing(8)
         
-        # 选项卡
         self.tab_widget = QTabWidget()
         
-        # 单帧控制选项卡
         self.tab_single = QWidget()
         self._setup_single_frame_tab()
         self.tab_widget.addTab(self.tab_single, "单帧控制")
         
-        # 动画生成选项卡
         self.tab_animation = QWidget()
         self._setup_animation_tab()
         self.tab_widget.addTab(self.tab_animation, "动画生成")
         
-        # 视角控制选项卡（新增）
         self.tab_view = QWidget()
         self._setup_view_tab()
         self.tab_widget.addTab(self.tab_view, "视角控制")
         
-        # 关节索引选项卡
         self.tab_index = QWidget()
         self._setup_index_tab()
         self.tab_widget.addTab(self.tab_index, "关节索引")
@@ -374,9 +351,6 @@ class HumanAnimationSystem(QMainWindow):
         main_layout.addWidget(right_scroll, 4)
         
         self._draw_empty_hint()
-        
-        # 默认加载示例视角
-        self._load_default_views()
     
     def _init_axes(self):
         self.ax.set_xlim(-1, 1)
@@ -388,24 +362,19 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.set_title("SMPL-X")
         self.ax.view_init(elev=20, azim=45)
     
-    # ====================== 视角相关方法 ======================
     def _on_view_change(self, value=None):
-        """视角滑条变化处理"""
         global current_view_elev, current_view_azim, current_view_dist
         current_view_elev = self.elev_slider.value()
         current_view_azim = self.azim_slider.value()
         current_view_dist = self.dist_slider.value() / 100.0
         
-        # 更新显示
         elev_str = f"{current_view_elev}°"
         azim_str = f"{current_view_azim}°"
         self.view_status_label.setText(f"视角: elev={elev_str}, azim={azim_str}")
         
-        # 更新视图
         self._update_render()
     
     def _set_view(self, elev, azim, dist=None, animate=False):
-        """设置视角（支持动画过渡）"""
         global current_view_elev, current_view_azim, current_view_dist
         
         current_view_elev = elev
@@ -413,7 +382,6 @@ class HumanAnimationSystem(QMainWindow):
         if dist is not None:
             current_view_dist = dist
         
-        # 更新滑条
         self.elev_slider.blockSignals(True)
         self.azim_slider.blockSignals(True)
         self.dist_slider.blockSignals(True)
@@ -427,24 +395,19 @@ class HumanAnimationSystem(QMainWindow):
         self.azim_slider.blockSignals(False)
         self.dist_slider.blockSignals(False)
         
-        # 更新标签
         self.view_status_label.setText(f"视角: elev={elev}°, azim={azim}°")
         
-        # 更新渲染
         self._update_render()
     
     def _on_canvas_click(self, event):
-        """画布点击事件 - 局部视角聚焦"""
+        global shape_params, pose_params, body_model
         if event.inaxes != self.ax or body_model is None:
             return
         
-        # 获取点击位置
         x, y = event.xdata, event.ydata
         if x is None or y is None:
             return
         
-        # 简化的最近关节查找
-        global shape_params, pose_params, body_model
         try:
             body_output = body_model(
                 betas=shape_params,
@@ -455,26 +418,23 @@ class HumanAnimationSystem(QMainWindow):
             )
             joints = body_output.joints.detach().cpu().numpy()[0]
             
-            # 找到最近的关节
             min_dist = float('inf')
             nearest_part = None
             for part_name, part_info in FOCUS_PARTS.items():
                 joint_idx = part_info['joint_idx']
                 if joint_idx < len(joints):
                     joint_pos = joints[joint_idx]
-                    dist = np.sqrt((joint_pos[0] - x)**2 + (joint_pos[1] - y)**2 + (joint_pos[2] - event.zdata if hasattr(event, 'zdata') and event.zdata else 0)**2)
+                    dist = np.sqrt((joint_pos[0] - x)**2 + (joint_pos[1] - y)**2)
                     if dist < min_dist:
                         min_dist = dist
                         nearest_part = part_name
             
-            # 如果点击位置足够近，聚焦到该部位
             if nearest_part and min_dist < 0.5:
                 self._focus_on_part(nearest_part)
         except Exception as e:
             print(f"点击聚焦失败: {e}")
     
     def _focus_on_part(self, part_name):
-        """聚焦到指定部位"""
         if part_name not in FOCUS_PARTS:
             return
         
@@ -483,7 +443,6 @@ class HumanAnimationSystem(QMainWindow):
         azim = part_info['default_azim']
         zoom = part_info['zoom']
         
-        # 根据zoom调整距离
         base_dist = 100
         new_dist = max(30, min(200, int(base_dist / zoom)))
         
@@ -491,7 +450,6 @@ class HumanAnimationSystem(QMainWindow):
         self.status_label.setText(f"状态: 已聚焦到 {part_name}")
     
     def _save_current_view(self):
-        """保存当前视角"""
         view_name, ok = QInputDialog.getText(
             self, "保存视角", "请输入视角名称:",
             QLineEdit.Normal, f"视角{self.view_saved_count + 1}"
@@ -513,7 +471,6 @@ class HumanAnimationSystem(QMainWindow):
             self.status_label.setText(f"视角 '{view_name}' 已保存")
     
     def _load_saved_view(self, view_name):
-        """加载保存的视角"""
         if view_name not in saved_views:
             return
         
@@ -522,37 +479,28 @@ class HumanAnimationSystem(QMainWindow):
         self.status_label.setText(f"视角 '{view_name}' 已加载")
     
     def _delete_saved_view(self, view_name):
-        """删除保存的视角"""
         if view_name in saved_views:
             del saved_views[view_name]
             self._refresh_saved_views_list()
             self.status_label.setText(f"视角 '{view_name}' 已删除")
     
     def _refresh_saved_views_list(self):
-        """刷新保存视角列表"""
         self.saved_views_list.clear()
         for name in sorted(saved_views.keys(), key=lambda x: saved_views[x]['timestamp']):
             item = QListWidgetItem(name)
             item.setToolTip(f"elev={saved_views[name]['elev']}°, azim={saved_views[name]['azim']}°")
             self.saved_views_list.addItem(item)
     
-    def _load_default_views(self):
-        """加载默认视角配置"""
-        pass  # 可以预定义一些默认视角
-    
     def _setup_view_tab(self):
-        """设置视角控制选项卡"""
         layout = QVBoxLayout(self.tab_view)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         
-        # ====================== 视角预设区域 ======================
         preset_group = QGroupBox("① 视角预设按钮")
         preset_layout = QGridLayout(preset_group)
         preset_layout.setContentsMargins(5, 5, 5, 5)
         preset_layout.setSpacing(5)
         
-        # 预设按钮排列：3行3列
         preset_names = ["正前", "正后", "正左", "正右", "正上", "俯视", "侧视"]
         for i, name in enumerate(preset_names):
             row, col = i // 4, i % 4
@@ -562,7 +510,6 @@ class HumanAnimationSystem(QMainWindow):
             btn.clicked.connect(lambda checked, n=name: self._apply_preset_view(n))
             preset_layout.addWidget(btn, row, col)
         
-        # 提示信息
         preset_hint = QLabel("💡 点击按钮一键切换标准视角，适合快速对齐姿态和对比不同帧效果")
         preset_hint.setWordWrap(True)
         preset_hint.setStyleSheet("QLabel { color: #666; font-size: 11px; }")
@@ -570,13 +517,11 @@ class HumanAnimationSystem(QMainWindow):
         
         layout.addWidget(preset_group)
         
-        # ====================== 局部视角聚焦区域 ======================
         focus_group = QGroupBox("② 局部视角聚焦")
         focus_layout = QGridLayout(focus_group)
         focus_layout.setContentsMargins(5, 5, 5, 5)
         focus_layout.setSpacing(5)
         
-        # 部位按钮分组
         focus_parts = [
             ["头部", "颈部", "躯干", "骨盆"],
             ["左手", "右手", "左臂", "右臂"],
@@ -593,7 +538,6 @@ class HumanAnimationSystem(QMainWindow):
                 btn.clicked.connect(lambda checked, p=part_name: self._focus_on_part(p))
                 focus_layout.addWidget(btn, row_idx, col_idx)
         
-        # 点击提示
         focus_hint = QLabel("💡 也可直接点击3D视图中的部位进行聚焦")
         focus_hint.setWordWrap(True)
         focus_hint.setStyleSheet("QLabel { color: #666; font-size: 11px; }")
@@ -601,13 +545,11 @@ class HumanAnimationSystem(QMainWindow):
         
         layout.addWidget(focus_group)
         
-        # ====================== 视角保存/加载区域 ======================
         save_load_group = QGroupBox("③ 视角保存 / 加载")
         save_load_layout = QVBoxLayout(save_load_group)
         save_load_layout.setContentsMargins(5, 5, 5, 5)
         save_load_layout.setSpacing(5)
         
-        # 按钮行
         btn_row = QHBoxLayout()
         save_btn = QPushButton("💾 保存当前视角")
         save_btn.setFixedHeight(35)
@@ -625,7 +567,6 @@ class HumanAnimationSystem(QMainWindow):
         
         save_load_layout.addLayout(btn_row)
         
-        # 已保存列表
         list_label = QLabel("已保存的视角:")
         save_load_layout.addWidget(list_label)
         
@@ -637,7 +578,6 @@ class HumanAnimationSystem(QMainWindow):
         )
         save_load_layout.addWidget(self.saved_views_list)
         
-        # 列表操作按钮
         list_btn_row = QHBoxLayout()
         load_selected_btn = QPushButton("加载选中")
         load_selected_btn.setFixedHeight(30)
@@ -655,11 +595,9 @@ class HumanAnimationSystem(QMainWindow):
         
         layout.addWidget(save_load_group)
         
-        # 添加伸缩
         layout.addStretch()
     
     def _apply_preset_view(self, preset_name):
-        """应用预设视角"""
         if preset_name not in VIEW_PRESETS:
             return
         
@@ -668,13 +606,11 @@ class HumanAnimationSystem(QMainWindow):
         self.status_label.setText(f"已切换到预设视角: {preset_name}")
     
     def _load_selected_view(self):
-        """加载选中的视角"""
         selected = self.saved_views_list.selectedItems()
         if selected:
             self._load_saved_view(selected[0].text())
     
     def _delete_selected_view(self):
-        """删除选中的视角"""
         selected = self.saved_views_list.selectedItems()
         if selected:
             view_name = selected[0].text()
@@ -686,7 +622,6 @@ class HumanAnimationSystem(QMainWindow):
                 self._delete_saved_view(view_name)
     
     def _clear_all_views(self):
-        """清空所有保存的视角"""
         global saved_views
         if not saved_views:
             return
@@ -701,14 +636,11 @@ class HumanAnimationSystem(QMainWindow):
             self._refresh_saved_views_list()
             self.status_label.setText("已清空所有视角")
     
-    # ====================== 原有选项卡设置方法 ======================
     def _setup_single_frame_tab(self):
-        """单帧控制 + 精准关节映射"""
         layout = QVBoxLayout(self.tab_single)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
         
-        # 模型加载
         load_group = QGroupBox("模型加载")
         load_layout = QHBoxLayout(load_group)
         load_layout.setContentsMargins(5, 5, 5, 5)
@@ -722,7 +654,6 @@ class HumanAnimationSystem(QMainWindow):
         load_layout.addWidget(self.model_label, 2)
         layout.addWidget(load_group)
         
-        # 体型
         shape_group = QGroupBox("体型参数 β₀")
         shape_layout = QHBoxLayout(shape_group)
         shape_layout.setContentsMargins(5, 5, 5, 5)
@@ -778,7 +709,6 @@ class HumanAnimationSystem(QMainWindow):
         
         layout.addWidget(joint_group)
         
-        # 重置按钮
         reset_btn = QPushButton("重置所有参数")
         reset_btn.setFixedHeight(30)
         reset_btn.clicked.connect(self._reset_all)
@@ -812,7 +742,6 @@ class HumanAnimationSystem(QMainWindow):
         dir_layout.addRow(QLabel("帧数:"), self.frame_count)
         layout.addWidget(dir_group)
         
-        # 插值算法选择（新增）
         interp_group = QGroupBox("动画插值算法")
         interp_layout = QHBoxLayout(interp_group)
         interp_layout.setContentsMargins(5, 5, 5, 5)
@@ -1045,7 +974,6 @@ class HumanAnimationSystem(QMainWindow):
         self._update_render()
     
     def _update_joint(self, value, idx):
-        """关节更新"""
         global pose_params
         rad = value * np.pi / 180
         if idx == GLOBAL_ROTATION:
@@ -1082,7 +1010,6 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.clear()
         self._init_axes()
         
-        # 应用当前视角
         global current_view_elev, current_view_azim, current_view_dist
         self.ax.view_init(elev=current_view_elev, azim=current_view_azim)
         if current_view_dist is not None:
@@ -1160,7 +1087,6 @@ class HumanAnimationSystem(QMainWindow):
             if reply == QMessageBox.No:
                 return
         
-        # 获取插值算法选择
         selected_id = self.interp_button_group.checkedId()
         interpolation = "linear" if selected_id == 0 else "smooth"
         
