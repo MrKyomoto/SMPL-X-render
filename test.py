@@ -47,7 +47,7 @@ pose_params = torch.zeros(1, 156, device=device)
 # 默认视角参数（第三方观察视角，能清晰看到全身）
 DEFAULT_ELEV = 20
 DEFAULT_AZIM = 45
-DEFAULT_DIST = 1.0
+DEFAULT_DIST = 10  # 默认距离放大一些，确保看全
 
 current_view_elev = DEFAULT_ELEV
 current_view_azim = DEFAULT_AZIM
@@ -219,8 +219,10 @@ class AnimationWorker(QThread):
             ax.set_zlabel("Z")
             ax.set_title(f"Frame {frame_idx + 1}")
             
-            global current_view_elev, current_view_azim
+            global current_view_elev, current_view_azim, current_view_dist
             ax.view_init(elev=current_view_elev, azim=current_view_azim)
+            if current_view_dist is not None:
+                ax.dist = current_view_dist
             
             if body_model is None:
                 ax.text(0, 0, 1, "模型未加载", ha="center", va="center", fontsize=14)
@@ -307,7 +309,7 @@ class HumanAnimationSystem(QMainWindow):
         view_ctrl_layout.addWidget(QLabel("  距离:"))
         self.dist_slider = QSlider(Qt.Horizontal)
         self.dist_slider.setRange(50, 200)
-        self.dist_slider.setValue(100)
+        self.dist_slider.setValue(int(DEFAULT_DIST))
         self.dist_slider.setFixedHeight(20)
         self.dist_slider.valueChanged.connect(self._on_view_change)
         view_ctrl_layout.addWidget(self.dist_slider)
@@ -355,6 +357,7 @@ class HumanAnimationSystem(QMainWindow):
         self._draw_empty_hint()
     
     def _init_axes(self):
+        """初始化坐标轴，设置默认视角"""
         self.ax.set_xlim(-1, 1)
         self.ax.set_ylim(-1, 1)
         self.ax.set_zlim(0, 2)
@@ -364,17 +367,20 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.set_title("SMPL-X")
         # 使用全局默认视角参数
         self.ax.view_init(elev=DEFAULT_ELEV, azim=DEFAULT_AZIM)
+        # 设置视角距离，确保加载模型后不会自动缩放
+        self.ax.dist = DEFAULT_DIST
     
     def _on_view_change(self, value=None):
         """视角滑条变化处理"""
         global current_view_elev, current_view_azim, current_view_dist
         current_view_elev = self.elev_slider.value()
         current_view_azim = self.azim_slider.value()
-        current_view_dist = self.dist_slider.value() / 100.0
+        current_view_dist = self.dist_slider.value()  # 滑条值直接作为距离
         
         elev_str = f"{current_view_elev}°"
         azim_str = f"{current_view_azim}°"
-        self.view_status_label.setText(f"视角: elev={elev_str}, azim={azim_str}")
+        dist_str = f"{current_view_dist}"
+        self.view_status_label.setText(f"视角: elev={elev_str}, azim={azim_str}, dist={dist_str}")
         
         self._update_render()
     
@@ -395,13 +401,13 @@ class HumanAnimationSystem(QMainWindow):
         self.elev_slider.setValue(int(elev))
         self.azim_slider.setValue(int(azim))
         if dist is not None:
-            self.dist_slider.setValue(int(dist * 100))
+            self.dist_slider.setValue(int(dist))
         
         self.elev_slider.blockSignals(False)
         self.azim_slider.blockSignals(False)
         self.dist_slider.blockSignals(False)
         
-        self.view_status_label.setText(f"视角: elev={elev}°, azim={azim}°")
+        self.view_status_label.setText(f"视角: elev={elev}°, azim={azim}°, dist={int(dist) if dist else DEFAULT_DIST}")
         
         self._update_render()
     
@@ -452,7 +458,7 @@ class HumanAnimationSystem(QMainWindow):
         self.saved_views_list.clear()
         for name in sorted(saved_views.keys(), key=lambda x: saved_views[x]['timestamp']):
             item = QListWidgetItem(name)
-            item.setToolTip(f"elev={saved_views[name]['elev']}°, azim={saved_views[name]['azim']}°")
+            item.setToolTip(f"elev={saved_views[name]['elev']}°, azim={saved_views[name]['azim']}°, dist={saved_views[name]['dist']}")
             self.saved_views_list.addItem(item)
     
     def _setup_view_tab(self):
