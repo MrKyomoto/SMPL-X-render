@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
-SMPL-X 3D人体动画控制与动画生成系统 - 视角增强版
-新增功能：
-① 视角预设：一键切换 正前/正后/正左/正右/俯视/仰视
-② 视角保存/加载：支持保存3-5个常用视角
-③ 动画插值：线性插值/平滑插值可选
+SMPL-X 3D人体动画控制与动画生成系统
 """
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -47,7 +43,7 @@ pose_params = torch.zeros(1, 156, device=device)
 # 默认视角参数（第三方观察视角，能清晰看到全身）
 DEFAULT_ELEV = 20
 DEFAULT_AZIM = 45
-DEFAULT_DIST = 10  # 默认距离放大一些，确保看全
+DEFAULT_DIST = 10
 
 current_view_elev = DEFAULT_ELEV
 current_view_azim = DEFAULT_AZIM
@@ -255,7 +251,7 @@ class AnimationWorker(QThread):
 class HumanAnimationSystem(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SMPL-X 3D人体动画控制与动画生成系统 - 视角增强版")
+        self.setWindowTitle("SMPL-X 3D人体动画控制与动画生成系统")
         self.setGeometry(100, 100, 1500, 950)
         self.setMinimumSize(1100, 750)
         self.generate_btn = None
@@ -1105,8 +1101,7 @@ if __name__ == "__main__":
         window = HumanAnimationSystem()
         window.show()
         print("=" * 70)
-        print("SMPL-X 3D人体动画控制系统 - 视角增强版")
-        print("新增功能: 视角预设 / 视角保存 / 平滑插值")
+        print("SMPL-X 3D人体动画控制系统")
         print("=" * 70)
         sys.exit(app.exec_())
     except Exception as e:
