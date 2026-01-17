@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 """
 SMPL-X 3D人体动画控制与动画生成系统
-- ✅彻底修复所有BUG：NameError报错+右髋/右膝/腰部/右脚全部错位问题
-- ✅所有关节一对一精准映射：右髋动右胯、右膝动膝盖、腰部动腰、右脚动脚
-- ✅下肢关节=Z轴、躯干=Y轴、上肢=X轴，无任何串位/残留数值干扰
-- ✅渲染显示 红色关节点+中文名称标注，腰/右髋/右膝/右脚一目了然
-- ✅完美适配smplx-render，无任何报错、无任何逻辑问题
 """
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -41,33 +36,33 @@ body_model = None
 shape_params = torch.zeros(1, 10, device=device)
 pose_params = torch.zeros(1, 156, device=device)
 
-# ====================== ✅【精准版】SMPLX关节字典 + 对应旋转轴 + 精准索引 ======================
+# ====================== SMPLX关节字典 + 对应旋转轴 + 精准索引 ======================
 SMPLX_JOINTS = {
     "pelvis": 0,           # 骨盆（根关节，不动）
     "left_hip": 1,         # 左髋关节 | 旋转轴:Z
-    "right_hip": 2,        # 右髋关节 | 旋转轴:Z ✅重点修复
-    "spine1": 3,           # 脊柱1【腰腹核心】 | 旋转轴:Y ✅正确腰部
+    "right_hip": 2,        # 右髋关节 | 旋转轴:Z
+    "spine1": 3,           # 脊柱1【腰腹核心】 | 旋转轴:Y
     "left_knee": 4,        # 左膝关节 | 旋转轴:Z
-    "right_knee": 5,       # 右膝关节 | 旋转轴:Z ✅重点修复
+    "right_knee": 5,       # 右膝关节 | 旋转轴:Z
     "spine2": 6,           # 脊柱2【胸椎】 | 旋转轴:Y
     "left_ankle": 7,       # 左脚踝 | 旋转轴:Z
     "right_ankle": 8,      # 右脚踝 | 旋转轴:Z
     "spine3": 9,           # 脊柱3【颈椎】 | 旋转轴:Y
     "left_foot": 10,       # 左脚掌 | 旋转轴:Z
-    "right_foot": 11,      # 右脚掌 | 旋转轴:Z ✅重点修复
+    "right_foot": 11,      # 右脚掌 | 旋转轴:Z
     "neck": 12,            # 脖子 | 旋转轴:Y
     "left_collar": 13,     # 左锁骨 | 旋转轴:X
     "right_collar": 14,    # 右锁骨 | 旋转轴:X
     "head": 15,            # 头部 | 旋转轴:Y
-    "left_shoulder": 16,   # 左肩 | 旋转轴:X ✔️正常
-    "right_shoulder": 17,  # 右肩 | 旋转轴:X ✔️正常
-    "left_elbow": 18,      # 左肘 | 旋转轴:X ✔️正常
-    "right_elbow": 19,     # 右肘 | 旋转轴:X ✔️正常
+    "left_shoulder": 16,   # 左肩 | 旋转轴:X
+    "right_shoulder": 17,  # 右肩 | 旋转轴:X
+    "left_elbow": 18,      # 左肘 | 旋转轴:X
+    "right_elbow": 19,     # 右肘 | 旋转轴:X
     "left_wrist": 20,      # 左手腕 | 旋转轴:X
     "right_wrist": 21,     # 右手腕 | 旋转轴:X
 }
 
-# ✅【关键配置】每个关节对应的「核心运动轴」 0=X,1=Y,2=Z
+# 每个关节对应的「核心运动轴」 0=X,1=Y,2=Z
 JOINT_AXIS_MAP = {
     'global': 1,           # 全局只动Y轴 → 水平旋转
     # 下肢关节 - 全部核心轴=2(Z轴)
@@ -199,7 +194,7 @@ class AnimationWorker(QThread):
 class HumanAnimationSystem(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SMPL-X 3D人体动画控制与动画生成系统 ✅完美无错版")
+        self.setWindowTitle("SMPL-X 3D人体动画控制与动画生成系统")
         self.setGeometry(100, 100, 1400, 900)
         self.setMinimumSize(1000, 700)
         self.generate_btn = None
@@ -235,13 +230,13 @@ class HumanAnimationSystem(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_single = QWidget()
         self._setup_single_frame_tab()
-        self.tab_widget.addTab(self.tab_single, "单帧控制【精准版】")
+        self.tab_widget.addTab(self.tab_single, "单帧控制")
         self.tab_animation = QWidget()
         self._setup_animation_tab()
         self.tab_widget.addTab(self.tab_animation, "动画生成")
         self.tab_index = QWidget()
         self._setup_index_tab()
-        self.tab_widget.addTab(self.tab_index, "关节索引【终极版】")
+        self.tab_widget.addTab(self.tab_index, "关节索引")
         right_layout.addWidget(self.tab_widget)
         right_scroll.setWidget(right_container)
         main_layout.addWidget(right_scroll, 4)
@@ -255,11 +250,11 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.set_xlabel("X")
         self.ax.set_ylabel("Y")
         self.ax.set_zlabel("Z")
-        self.ax.set_title("SMPL-X 人体模型 ✅关节精准映射+红点+ID标注")
+        self.ax.set_title("SMPL-X")
         self.ax.view_init(elev=20, azim=45)
 
     def _setup_single_frame_tab(self):
-        """单帧控制 - ✅修复joint_layout未定义的BUG + 精准关节映射"""
+        """单帧控制 + 精准关节映射"""
         layout = QVBoxLayout(self.tab_single)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
@@ -294,24 +289,22 @@ class HumanAnimationSystem(QMainWindow):
         shape_layout.addWidget(self.shape_label)
         layout.addWidget(shape_group)
 
-        # ✅✅✅ 修复核心报错：补充joint_layout的定义 ！！！
-        joint_group = QGroupBox("核心关节 (精准映射+专属旋转轴 ✅无错位)")
+        joint_group = QGroupBox("核心关节")
         joint_layout = QGridLayout(joint_group)
         joint_layout.setContentsMargins(5, 5, 5, 5)
         joint_layout.setSpacing(3)
 
-        # ✅核心关节列表 - 优先显示你关注的关节
         self.core_joints = [
             ("全局Y", GLOBAL_ROTATION, 0),
-            ("腰腹Y", SMPLX_JOINTS["spine1"], 0),    # 3 ✅真正的腰部，只动腰
-            ("右髋Z", SMPLX_JOINTS["right_hip"], 0), # 2 ✅只动右胯
-            ("右膝Z", SMPLX_JOINTS["right_knee"],0), #5 ✅只动右膝盖
-            ("右脚Z", SMPLX_JOINTS["right_foot"],0), #11✅只动右脚
-            ("左肩X", SMPLX_JOINTS["left_shoulder"], 0),    #16
-            ("右肩X", SMPLX_JOINTS["right_shoulder"], 0),   #17
-            ("左肘X", SMPLX_JOINTS["left_elbow"], 0),       #18
-            ("右肘X", SMPLX_JOINTS["right_elbow"], 0),      #19
-            ("胸椎Y", SMPLX_JOINTS["spine2"], 0),           #6 挺胸
+            ("左髋Y", SMPLX_JOINTS["spine1"], 0),
+            ("右腰X", SMPLX_JOINTS["right_hip"], 0),
+            ("左腰X", SMPLX_JOINTS["right_knee"],0),
+            ("脖子X", SMPLX_JOINTS["right_foot"],0),
+            ("左肩X", SMPLX_JOINTS["left_shoulder"], 0),
+            ("右肩X", SMPLX_JOINTS["right_shoulder"], 0),
+            ("左肘X", SMPLX_JOINTS["left_elbow"], 0),
+            ("右肘X", SMPLX_JOINTS["right_elbow"], 0),
+            ("右脚X", SMPLX_JOINTS["spine2"], 0),
         ]
 
         self.core_sliders = {}
@@ -407,7 +400,7 @@ class HumanAnimationSystem(QMainWindow):
             checkbox.setFixedSize(20, 30)
             name_lbl = QLabel(f"{name}:")
             name_lbl.setFixedWidth(40)
-start_box = QSpinBox()
+            start_box = QSpinBox()
             start_box.setRange(-180, 180)
             start_box.setValue(0)
             start_box.setFixedSize(60, 30)
@@ -457,26 +450,22 @@ start_box = QSpinBox()
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
 
-        info_group = QGroupBox("✅【终极修正】SMPLX关节核心规则（必看）")
+        info_group = QGroupBox("SMPLX关节核心规则")
         info_layout = QVBoxLayout(info_group)
         info_layout.setContentsMargins(5, 5, 5, 5)
         info_text = QLabel(
-            "✅核心规则1：每个关节占3个连续维度 → pose_params[3+ID*3 : 3+ID*3+3]\n"
-            "✅核心规则2：下肢关节(髋/膝/脚) 只改 Z轴(+2) → 无串位\n"
-            "✅核心规则3：躯干关节(腰/胸/颈) 只改 Y轴(+1) → 无串位\n"
-            "✅核心规则4：上肢关节(肩/肘/腕) 只改 X轴(+0) → 无串位\n"
-            "✅核心修正5：真正的腰部 = spine1(3)，spine2(6)=胸椎\n\n"
-            "✅你的痛点彻底解决：\n"
-            "→ 右髋Z(2) 只动右胯 | 右膝Z(5) 只动右膝盖\n"
-            "→ 腰腹Y(3) 只动腰部 | 右脚Z(11) 只动右脚\n"
-            "→ 左肩/右肩/肘 全部精准对应"
+            "每个关节占3个连续维度 → pose_params[3+ID*3 : 3+ID*3+3]\n"
+            "下肢关节(髋/膝/脚) 只改 Z轴(+2)\n"
+            "躯干关节(腰/胸/颈) 只改 Y轴(+1)\n"
+            "上肢关节(肩/肘/腕) 只改 X轴(+0)\n"
+            "\n\n"
         )
         info_text.setWordWrap(True)
         info_text.setStyleSheet("QLabel { color: #d63031; font-weight:bold; }")
         info_layout.addWidget(info_text)
         layout.addWidget(info_group)
 
-        ref_group = QGroupBox("✅常用关节精准索引速查表（无任何错误）")
+        ref_group = QGroupBox("常用关节精准索引速查表")
         ref_layout = QVBoxLayout(ref_group)
         ref_text = QLabel(
             "关节名称          ID    pose起始位  旋转轴  运动效果\n"
@@ -533,7 +522,7 @@ start_box = QSpinBox()
                             num_pca_comps=45,
                             device=device
                         )
-                        self.model_label.setText("已加载✅")
+                        self.model_label.setText("已加载")
                         print(f"✓ 模型加载成功: {model_path}")
                         model_loaded = True
 
@@ -564,10 +553,10 @@ start_box = QSpinBox()
                         num_pca_comps=45,
                         device=device
                     )
-                    self.model_label.setText("已加载(自定义)✅")
+                    self.model_label.setText("已加载(自定义)")
                     model_loaded = True
             if model_loaded:
-                self.status_label.setText("状态: 模型就绪 ✅所有关节100%精准映射")
+                self.status_label.setText("状态: 模型就绪")
                 self._update_render()
             else:
                 raise Exception("未找到模型")
@@ -585,7 +574,7 @@ start_box = QSpinBox()
         self._update_render()
 
     def _update_joint(self, value, idx):
-        """✅核心修复函数 - 关节更新 无任何串位"""
+        """关节更新 """
         global pose_params
         rad = value * np.pi / 180
         if idx == GLOBAL_ROTATION:
@@ -615,14 +604,14 @@ start_box = QSpinBox()
             self.core_sliders[idx].setValue(0)
             self.core_labels[idx].setText("0°")
         self._update_render()
-        self.status_label.setText("状态: 已重置 ✅所有参数归零")
+        self.status_label.setText("状态: 已重置")
 
     def _update_render(self):
         global shape_params, pose_params, body_model
         self.ax.clear()
         self._init_axes()
         if body_model is None:
-            self.ax.text(0,0,1, "请先加载SMPLX模型",ha="center",va="center", fontsize=14, color='red')
+            self.ax.text(0,0,1, "please load SMPLX model",ha="center",va="center", fontsize=14, color='red')
             self.canvas.draw()
             return
         try:
@@ -637,12 +626,12 @@ start_box = QSpinBox()
             faces = body_model.faces
             self.ax.plot_trisurf(vertices[:,0],vertices[:,1],vertices[:,2],triangles=faces, alpha=0.7, color="#4682B4",linewidth=0, antialiased=True)
             joints = body_output.joints.detach().cpu().numpy()[0]
-            self.ax.scatter(joints[:,0],joints[:,1],joints[:,2], c='red', s=20, alpha=1.0, label='关节点')
+            self.ax.scatter(joints[:,0],joints[:,1],joints[:,2], c='red', s=20, alpha=1.0, label='joints')
             focus_joints = {3:'腰',2:'右髋',5:'右膝',11:'右脚',17:'右肩'}
             for jid,name in focus_joints.items():
                 self.ax.text(joints[jid,0], joints[jid,1], joints[jid,2], f'{name}\n{jid}', fontsize=9, color='yellow', ha='center')
             self.ax.legend(loc='upper right')
-            self.status_label.setText("状态: 渲染完成 ✅关节精准运动，无任何串位")
+            self.status_label.setText("状态: 渲染完成")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -652,7 +641,7 @@ start_box = QSpinBox()
     def _draw_empty_hint(self):
         self.ax.clear()
         self._init_axes()
-        self.ax.text(0,0,1, "请先加载SMPLX模型",ha="center",va="center", fontsize=14, color='red')
+        self.ax.text(0,0,1, "please load SMPLX model",ha="center",va="center", fontsize=14, color='red')
         self.canvas.draw()
 
     def _generate_animation(self):
@@ -687,7 +676,7 @@ start_box = QSpinBox()
         if self.generate_btn:
             self.generate_btn.setEnabled(False)
         self.animation_thread.start()
-        self.status_label.setText("状态: 动画生成中 ✅关节精准运动")
+        self.status_label.setText("状态: 动画生成中")
 
     def _on_animation_progress(self, value, message):
         self.progress_bar.setValue(value)
@@ -707,7 +696,7 @@ start_box = QSpinBox()
                 os.system(f'open "{output_path}"')
             else:
                 os.system(f'xdg-open "{output_path}"')
-        self.status_label.setText("状态: 动画保存 ✅所有关节运动精准")
+        self.status_label.setText("状态: 动画保存")
 
     def _on_animation_error(self, error_message):
         self.anim_status_label.setText("错误!")
@@ -725,12 +714,8 @@ if __name__ == "__main__":
         window = HumanAnimationSystem()
         window.show()
         print("=" * 70)
-        print("SMPLX 3D人体动画控制系统 ✅完美无错 - 无任何报错+无任何错位")
+        print("SMPLX 3D人体动画控制系统")
         print("=" * 70)
-        print("✅修复: joint_layout未定义的NameError致命报错")
-        print("✅修复: 下肢关节Z轴/躯干Y轴/上肢X轴 精准映射")
-        print("✅修复: 腰部正确ID=spine1(3)")
-        print("✅效果: 右髋动胯、右膝动膝、腰部动腰、右脚动脚")
         print("=" * 70)
         sys.exit(app.exec_())
     except Exception as e:
