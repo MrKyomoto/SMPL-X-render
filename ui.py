@@ -4,12 +4,12 @@ SMPL-X 3D人体动画控制系统 - 主界面和逻辑
 """
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QSlider, QLabel, QGroupBox, QGridLayout,
     QSpinBox, QLineEdit, QProgressBar, QMessageBox,
-    QTabWidget, QFormLayout, QCheckBox, QScrollArea, QComboBox,
+    QTabWidget, QFormLayout, QCheckBox, QScrollArea,
     QFrame, QTextEdit, QListWidget, QListWidgetItem,
     QInputDialog, QRadioButton, QButtonGroup
 )
@@ -24,11 +24,8 @@ import os
 
 # 导入配置模块
 from config import (
-    device, body_model, shape_params, pose_params,
-    SMPLX_JOINTS, JOINT_AXIS_MAP, GLOBAL_ROTATION,
-    DEFAULT_ELEV, DEFAULT_AZIM, DEFAULT_DIST,
-    current_view_elev, current_view_azim, current_view_dist, saved_views,
-    VIEW_PRESETS
+    device, SMPLX_JOINTS, JOINT_AXIS_MAP, GLOBAL_ROTATION,
+    DEFAULT_ELEV, DEFAULT_AZIM, DEFAULT_DIST, VIEW_PRESETS
 )
 
 # 导入动画线程
@@ -38,6 +35,7 @@ from animation_worker import AnimationWorker
 matplotlib.use('Agg')
 plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'SimHei', 'WenQuanYi Micro Hei']
 plt.rcParams['axes.unicode_minus'] = False
+
 
 class HumanAnimationSystem(QMainWindow):
     """SMPL-X 3D人体动画控制与动画生成系统主窗口"""
@@ -98,7 +96,7 @@ class HumanAnimationSystem(QMainWindow):
         view_ctrl_layout.addWidget(QLabel("  水平:"))
         self.azim_slider = QSlider(Qt.Horizontal)
         self.azim_slider.setRange(-180, 180)
-        self.azim_slider.setValue(DEFAULT_AZIM)
+        self.azValue(DEFAULT_AZim_slider.setIM)
         self.azim_slider.setFixedHeight(20)
         self.azim_slider.valueChanged.connect(self._on_view_change)
         view_ctrl_layout.addWidget(self.azim_slider)
@@ -160,17 +158,17 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.set_ylabel("Y")
         self.ax.set_zlabel("Z")
         self.ax.set_title("SMPL-X")
-        # 使用全局默认视角参数
         self.ax.view_init(elev=DEFAULT_ELEV, azim=DEFAULT_AZIM)
-        # 设置视角距离，确保加载模型后不会自动缩放
         self.ax.dist = DEFAULT_DIST
     
     def _on_view_change(self, value=None):
         """视角滑条变化处理"""
-        global current_view_elev, current_view_azim, current_view_dist
+        from config import current_view_elev, current_view_azim, current_view_dist
+        
+        # 更新全局视角变量
         current_view_elev = self.elev_slider.value()
         current_view_azim = self.azim_slider.value()
-        current_view_dist = self.dist_slider.value()  # 滑条值直接作为距离
+        current_view_dist = self.dist_slider.value()
         
         elev_str = f"{current_view_elev}°"
         azim_str = f"{current_view_azim}°"
@@ -181,7 +179,7 @@ class HumanAnimationSystem(QMainWindow):
     
     def _set_view(self, elev, azim, dist=None):
         """设置视角"""
-        global current_view_elev, current_view_azim, current_view_dist
+        from config import current_view_elev, current_view_azim, current_view_dist
         
         current_view_elev = elev
         current_view_azim = azim
@@ -219,7 +217,7 @@ class HumanAnimationSystem(QMainWindow):
         
         if ok and view_name.strip():
             view_name = view_name.strip()
-            global saved_views, current_view_elev, current_view_azim, current_view_dist
+            from config import saved_views, current_view_elev, current_view_azim, current_view_dist
             
             saved_views[view_name] = {
                 'elev': current_view_elev,
@@ -234,6 +232,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _load_saved_view(self, view_name):
         """加载保存的视角"""
+        from config import saved_views
+        
         if view_name not in saved_views:
             return
         
@@ -243,6 +243,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _delete_saved_view(self, view_name):
         """删除保存的视角"""
+        from config import saved_views
+        
         if view_name in saved_views:
             del saved_views[view_name]
             self._refresh_saved_views_list()
@@ -250,6 +252,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _refresh_saved_views_list(self):
         """刷新保存视角列表"""
+        from config import saved_views
+        
         self.saved_views_list.clear()
         for name in sorted(saved_views.keys(), key=lambda x: saved_views[x]['timestamp']):
             item = QListWidgetItem(name)
@@ -262,13 +266,12 @@ class HumanAnimationSystem(QMainWindow):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         
-        # ====================== 视角预设区域 ======================
+        # 视角预设区域
         preset_group = QGroupBox("视角预设")
         preset_layout = QGridLayout(preset_group)
         preset_layout.setContentsMargins(5, 5, 5, 5)
         preset_layout.setSpacing(5)
         
-        # 预设按钮排列：2行4列
         preset_names = ["正前", "正后", "正左", "正右", "俯视", "仰视", "默认"]
         for i, name in enumerate(preset_names):
             row, col = i // 4, i % 4
@@ -279,7 +282,6 @@ class HumanAnimationSystem(QMainWindow):
             btn.clicked.connect(lambda checked, n=name: self._apply_preset_view(n))
             preset_layout.addWidget(btn, row, col)
         
-        # 提示信息
         preset_hint = QLabel("💡 点击按钮快速切换标准视角")
         preset_hint.setWordWrap(True)
         preset_hint.setStyleSheet("QLabel { color: #666; font-size: 11px; }")
@@ -287,13 +289,12 @@ class HumanAnimationSystem(QMainWindow):
         
         layout.addWidget(preset_group)
         
-        # ====================== 视角保存/加载区域 ======================
+        # 视角保存/加载区域
         save_load_group = QGroupBox("视角保存 / 加载")
         save_load_layout = QVBoxLayout(save_load_group)
         save_load_layout.setContentsMargins(5, 5, 5, 5)
         save_load_layout.setSpacing(5)
         
-        # 按钮行
         btn_row = QHBoxLayout()
         save_btn = QPushButton("💾 保存当前视角")
         save_btn.setFixedHeight(35)
@@ -311,7 +312,6 @@ class HumanAnimationSystem(QMainWindow):
         
         save_load_layout.addLayout(btn_row)
         
-        # 已保存列表
         list_label = QLabel("已保存的视角:")
         save_load_layout.addWidget(list_label)
         
@@ -323,7 +323,6 @@ class HumanAnimationSystem(QMainWindow):
         )
         save_load_layout.addWidget(self.saved_views_list)
         
-        # 列表操作按钮
         list_btn_row = QHBoxLayout()
         load_selected_btn = QPushButton("加载选中")
         load_selected_btn.setFixedHeight(30)
@@ -340,8 +339,6 @@ class HumanAnimationSystem(QMainWindow):
         save_load_layout.addLayout(list_btn_row)
         
         layout.addWidget(save_load_group)
-        
-        # 添加伸缩
         layout.addStretch()
     
     def _apply_preset_view(self, preset_name):
@@ -373,7 +370,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _clear_all_views(self):
         """清空所有保存的视角"""
-        global saved_views
+        from config import saved_views
+        
         if not saved_views:
             return
         
@@ -389,6 +387,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _setup_single_frame_tab(self):
         """单帧控制 + 精准关节映射"""
+        from config import body_model
+        
         layout = QVBoxLayout(self.tab_single)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
@@ -563,8 +563,8 @@ class HumanAnimationSystem(QMainWindow):
             name_lbl.setFixedWidth(40)
             start_box = QSpinBox()
             start_box.setRange(-180, 180)
-            start_box.setValue(0)
-            start_box.setFixedSize(60, 30)
+            start_box.setValue(_box.setFixedSize0)
+            start(60, 30)
             start_box.setSuffix("°")
             arrow_lbl = QLabel("→")
             arrow_lbl.setFixedWidth(20)
@@ -671,7 +671,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _load_smplx_model(self):
         """加载SMPLX模型"""
-        global body_model
+        from config import body_model as bm
+        
         try:
             possible_paths = [
                 "./smplx_models",
@@ -681,9 +682,11 @@ class HumanAnimationSystem(QMainWindow):
                 "/home/kyomoto/repo/python/smpl-render/smplx_models",
             ]
             model_loaded = False
+            
             for model_path in possible_paths:
                 if os.path.exists(model_path):
                     try:
+                        import smplx
                         body_model = smplx.create(
                             model_path=model_path,
                             model_type="smplx",
@@ -695,6 +698,11 @@ class HumanAnimationSystem(QMainWindow):
                         )
                         self.model_label.setText("已加载")
                         print(f"✓ 模型加载成功: {model_path}")
+                        
+                        # 更新config中的body_model
+                        import config
+                        config.body_model = body_model
+                        
                         model_loaded = True
                         
                         if hasattr(body_model, 'joint_mapper'):
@@ -726,6 +734,9 @@ class HumanAnimationSystem(QMainWindow):
                         device=device
                     )
                     self.model_label.setText("已加载(自定义)")
+                    
+                    import config
+                    config.body_model = body_model
                     model_loaded = True
             
             if model_loaded:
@@ -742,14 +753,16 @@ class HumanAnimationSystem(QMainWindow):
     
     def _update_shape(self, value):
         """更新体型参数"""
-        global shape_params
+        from config import shape_params
+        
         shape_params[0, 0] = value
         self.shape_label.setText(str(value))
         self._update_render()
     
     def _update_joint(self, value, idx):
         """更新关节参数"""
-        global pose_params
+        from config import pose_params, JOINT_AXIS_MAP
+        
         rad = value * np.pi / 180
         if idx == GLOBAL_ROTATION:
             pose_params[0, 0] = 0.0
@@ -770,7 +783,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _reset_all(self):
         """重置所有参数，包括视角"""
-        global shape_params, pose_params
+        from config import shape_params, pose_params
+        
         shape_params = torch.zeros(1, 10, device=device)
         pose_params = torch.zeros(1, 156, device=device)
         self.shape_slider.setValue(0)
@@ -778,18 +792,18 @@ class HumanAnimationSystem(QMainWindow):
         for idx in self.core_sliders:
             self.core_sliders[idx].setValue(0)
             self.core_labels[idx].setText("0°")
-        # 同时重置视角到默认值
         self._reset_view()
         self._update_render()
         self.status_label.setText("状态: 已重置所有参数和视角")
     
     def _update_render(self):
         """更新渲染"""
-        global shape_params, pose_params, body_model
+        from config import body_model, shape_params, pose_params
+        from config import current_view_elev, current_view_azim, current_view_dist
+        
         self.ax.clear()
         self._init_axes()
         
-        global current_view_elev, current_view_azim, current_view_dist
         self.ax.view_init(elev=current_view_elev, azim=current_view_azim)
         if current_view_dist is not None:
             self.ax.dist = current_view_dist
@@ -833,7 +847,9 @@ class HumanAnimationSystem(QMainWindow):
     
     def _generate_animation(self):
         """生成动画"""
-        global body_model
+        from config import body_model, shape_params, pose_params
+        from config import current_view_elev, current_view_azim, current_view_dist
+        
         if body_model is None:
             QMessageBox.warning(self, "警告", "请先加载SMPLX模型!")
             return
@@ -871,8 +887,19 @@ class HumanAnimationSystem(QMainWindow):
         selected_id = self.interp_button_group.checkedId()
         interpolation = "linear" if selected_id == 0 else "smooth"
         
+        # 创建动画线程
         self.animation_thread = AnimationWorker(frames, output_path, interpolation=interpolation)
         self.animation_thread.set_params(shape_start, shape_end, joint_configs)
+        
+        # 传递当前状态给动画线程
+        self.animation_thread.set_state(shape_params, pose_params)
+        
+        # 设置全局变量
+        from animation_worker import set_globals
+        set_globals(body_model, shape_params, pose_params, 
+                   current_view_elev, current_view_azim, current_view_dist)
+        
+        # 连接信号
         self.animation_thread.progress_update.connect(self._on_animation_progress)
         self.animation_thread.finished_signal.connect(self._on_animation_finished)
         self.animation_thread.error_signal.connect(self._on_animation_error)
