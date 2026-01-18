@@ -954,6 +954,8 @@ class HumanAnimationSystem(QMainWindow):
         # 设置全局变量供动画线程使用
         set_globals(
             body_model,
+            shape_params,
+            pose_params,
             current_view_elev,
             current_view_azim,
             current_view_dist
