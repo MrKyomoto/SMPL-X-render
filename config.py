@@ -59,7 +59,6 @@ JOINT_AXIS_MAP = {
 GLOBAL_ROTATION = 'global'
 
 # ====================== 视角预设配置 ======================
-# 参照默认视角参数设置，确保能看清全身
 VIEW_PRESETS = {
     "正前": {"elev": 0, "azim": 0, "desc": "正面视角"},
     "正后": {"elev": 0, "azim": 180, "desc": "背面视角"},
