@@ -77,7 +77,9 @@ class HumanAnimationSystem(QMainWindow):
         left_layout.addWidget(self.canvas, 7)
         
         # 视角状态显示
-        self.view_status_label = QLabel(f"视角: 默认 (elev={DEFAULT_ELEV}°, azim={DEFAULT_AZIM}°)")
+        self.view_status_label = QLabel(
+            f"视角: 默认 (elev={DEFAULT_ELEV}°, azim={DEFAULT_AZIM}°)"
+        )
         self.view_status_label.setAlignment(Qt.AlignCenter)
         self.view_status_label.setStyleSheet(
             "QLabel { background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px; }"
@@ -162,19 +164,7 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.set_ylabel("Y")
         self.ax.set_zlabel("Z")
         self.ax.set_title("SMPL-X")
-        # 注意：这里不再设置默认视角，视角由 _update_render 控制
-    
-    def _update_view_settings(self):
-        """应用当前视角设置到3D坐标轴（修复版）"""
-        global current_view_elev, current_view_azim, current_view_dist
-        
-        self.ax.clear()
-        self._init_axes()
-        
-        # 在初始化之后再设置视角，这样就不会被覆盖
-        self.ax.view_init(elev=current_view_elev, azim=current_view_azim)
-        if current_view_dist is not None:
-            self.ax.dist = current_view_dist
+        # 注意：这里不再设置默认视角，视角由调用者决定
     
     def _on_view_change(self, value=None):
         """视角滑条变化处理"""
@@ -191,8 +181,8 @@ class HumanAnimationSystem(QMainWindow):
             f"视角: elev={elev_str}, azim={azim_str}, dist={dist_str}"
         )
         
-        self._update_view_settings()
-        self.canvas.draw()
+        # 重新渲染整个场景（包括模型）
+        self._update_render()
     
     def _set_view(self, elev, azim, dist=None):
         """设置视角"""
@@ -222,9 +212,8 @@ class HumanAnimationSystem(QMainWindow):
             f"视角: elev={elev}°, azim={azim}°, dist={dist_display}"
         )
         
-        # 应用视角设置
-        self._update_view_settings()
-        self.canvas.draw()
+        # 重新渲染整个场景（包括模型）
+        self._update_render()
     
     def _reset_view(self):
         """重置视角到默认值"""
@@ -844,7 +833,7 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.clear()
         self._init_axes()
         
-        # 在初始化之后再设置视角，确保不被覆盖
+        # 在初始化之后再设置视角，确保使用当前的视角值
         self.ax.view_init(elev=current_view_elev, azim=current_view_azim)
         if current_view_dist is not None:
             self.ax.dist = current_view_dist
@@ -896,6 +885,8 @@ class HumanAnimationSystem(QMainWindow):
     
     def _draw_empty_hint(self):
         """绘制空提示"""
+        global current_view_elev, current_view_azim, current_view_dist
+        
         self.ax.clear()
         self._init_axes()
         # 设置初始视角
