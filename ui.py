@@ -25,11 +25,13 @@ import os
 # 导入配置模块
 from config import (
     device, SMPLX_JOINTS, JOINT_AXIS_MAP, GLOBAL_ROTATION,
-    DEFAULT_ELEV, DEFAULT_AZIM, DEFAULT_DIST, VIEW_PRESETS
+    DEFAULT_ELEV, DEFAULT_AZIM, DEFAULT_DIST, VIEW_PRESETS,
+    body_model, shape_params, pose_params,
+    current_view_elev, current_view_azim, current_view_dist, saved_views
 )
 
 # 导入动画线程
-from animation_worker import AnimationWorker
+from animation_worker import AnimationWorker, set_globals
 
 # 设置matplotlib
 matplotlib.use('Agg')
@@ -77,7 +79,9 @@ class HumanAnimationSystem(QMainWindow):
         # 视角状态显示
         self.view_status_label = QLabel(f"视角: 默认 (elev={DEFAULT_ELEV}°, azim={DEFAULT_AZIM}°)")
         self.view_status_label.setAlignment(Qt.AlignCenter)
-        self.view_status_label.setStyleSheet("QLabel { background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px; }")
+        self.view_status_label.setStyleSheet(
+            "QLabel { background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px; }"
+        )
         left_layout.addWidget(self.view_status_label)
         
         # 手动视角调整滑条
@@ -96,7 +100,7 @@ class HumanAnimationSystem(QMainWindow):
         view_ctrl_layout.addWidget(QLabel("  水平:"))
         self.azim_slider = QSlider(Qt.Horizontal)
         self.azim_slider.setRange(-180, 180)
-        self.azValue(DEFAULT_AZim_slider.setIM)
+        self.azim_slider.setValue(DEFAULT_AZIM)
         self.azim_slider.setFixedHeight(20)
         self.azim_slider.valueChanged.connect(self._on_view_change)
         view_ctrl_layout.addWidget(self.azim_slider)
@@ -150,7 +154,7 @@ class HumanAnimationSystem(QMainWindow):
         main_layout.addWidget(right_scroll, 4)
     
     def _init_axes(self):
-        """初始化坐标轴，设置默认视角"""
+        """初始化坐标轴基础设置（不包含视角）"""
         self.ax.set_xlim(-1, 1)
         self.ax.set_ylim(-1, 1)
         self.ax.set_zlim(0, 2)
@@ -158,14 +162,24 @@ class HumanAnimationSystem(QMainWindow):
         self.ax.set_ylabel("Y")
         self.ax.set_zlabel("Z")
         self.ax.set_title("SMPL-X")
-        self.ax.view_init(elev=DEFAULT_ELEV, azim=DEFAULT_AZIM)
-        self.ax.dist = DEFAULT_DIST
+        # 注意：这里不再设置默认视角，视角由 _update_render 控制
+    
+    def _update_view_settings(self):
+        """应用当前视角设置到3D坐标轴（修复版）"""
+        global current_view_elev, current_view_azim, current_view_dist
+        
+        self.ax.clear()
+        self._init_axes()
+        
+        # 在初始化之后再设置视角，这样就不会被覆盖
+        self.ax.view_init(elev=current_view_elev, azim=current_view_azim)
+        if current_view_dist is not None:
+            self.ax.dist = current_view_dist
     
     def _on_view_change(self, value=None):
         """视角滑条变化处理"""
-        from config import current_view_elev, current_view_azim, current_view_dist
+        global current_view_elev, current_view_azim, current_view_dist
         
-        # 更新全局视角变量
         current_view_elev = self.elev_slider.value()
         current_view_azim = self.azim_slider.value()
         current_view_dist = self.dist_slider.value()
@@ -173,13 +187,16 @@ class HumanAnimationSystem(QMainWindow):
         elev_str = f"{current_view_elev}°"
         azim_str = f"{current_view_azim}°"
         dist_str = f"{current_view_dist}"
-        self.view_status_label.setText(f"视角: elev={elev_str}, azim={azim_str}, dist={dist_str}")
+        self.view_status_label.setText(
+            f"视角: elev={elev_str}, azim={azim_str}, dist={dist_str}"
+        )
         
-        self._update_render()
+        self._update_view_settings()
+        self.canvas.draw()
     
     def _set_view(self, elev, azim, dist=None):
         """设置视角"""
-        from config import current_view_elev, current_view_azim, current_view_dist
+        global current_view_elev, current_view_azim, current_view_dist
         
         current_view_elev = elev
         current_view_azim = azim
@@ -200,9 +217,14 @@ class HumanAnimationSystem(QMainWindow):
         self.azim_slider.blockSignals(False)
         self.dist_slider.blockSignals(False)
         
-        self.view_status_label.setText(f"视角: elev={elev}°, azim={azim}°, dist={int(dist) if dist else DEFAULT_DIST}")
+        dist_display = int(dist) if dist else DEFAULT_DIST
+        self.view_status_label.setText(
+            f"视角: elev={elev}°, azim={azim}°, dist={dist_display}"
+        )
         
-        self._update_render()
+        # 应用视角设置
+        self._update_view_settings()
+        self.canvas.draw()
     
     def _reset_view(self):
         """重置视角到默认值"""
@@ -217,7 +239,7 @@ class HumanAnimationSystem(QMainWindow):
         
         if ok and view_name.strip():
             view_name = view_name.strip()
-            from config import saved_views, current_view_elev, current_view_azim, current_view_dist
+            global saved_views, current_view_elev, current_view_azim, current_view_dist
             
             saved_views[view_name] = {
                 'elev': current_view_elev,
@@ -232,7 +254,7 @@ class HumanAnimationSystem(QMainWindow):
     
     def _load_saved_view(self, view_name):
         """加载保存的视角"""
-        from config import saved_views
+        global saved_views
         
         if view_name not in saved_views:
             return
@@ -243,7 +265,7 @@ class HumanAnimationSystem(QMainWindow):
     
     def _delete_saved_view(self, view_name):
         """删除保存的视角"""
-        from config import saved_views
+        global saved_views
         
         if view_name in saved_views:
             del saved_views[view_name]
@@ -252,12 +274,17 @@ class HumanAnimationSystem(QMainWindow):
     
     def _refresh_saved_views_list(self):
         """刷新保存视角列表"""
-        from config import saved_views
+        global saved_views
         
         self.saved_views_list.clear()
         for name in sorted(saved_views.keys(), key=lambda x: saved_views[x]['timestamp']):
             item = QListWidgetItem(name)
-            item.setToolTip(f"elev={saved_views[name]['elev']}°, azim={saved_views[name]['azim']}°, dist={saved_views[name]['dist']}")
+            tooltip = (
+                f"elev={saved_views[name]['elev']}°, "
+                f"azim={saved_views[name]['azim']}°, "
+                f"dist={saved_views[name]['dist']}"
+            )
+            item.setToolTip(tooltip)
             self.saved_views_list.addItem(item)
     
     def _setup_view_tab(self):
@@ -298,12 +325,16 @@ class HumanAnimationSystem(QMainWindow):
         btn_row = QHBoxLayout()
         save_btn = QPushButton("💾 保存当前视角")
         save_btn.setFixedHeight(35)
-        save_btn.setStyleSheet("QPushButton { background-color: #3498db; color: white; }")
+        save_btn.setStyleSheet(
+            "QPushButton { background-color: #3498db; color: white; }"
+        )
         save_btn.clicked.connect(self._save_current_view)
         
         clear_btn = QPushButton("🗑️ 清空全部")
         clear_btn.setFixedHeight(35)
-        clear_btn.setStyleSheet("QPushButton { background-color: #e74c3c; color: white; }")
+        clear_btn.setStyleSheet(
+            "QPushButton { background-color: #e74c3c; color: white; }"
+        )
         clear_btn.clicked.connect(self._clear_all_views)
         
         btn_row.addWidget(save_btn)
@@ -330,7 +361,9 @@ class HumanAnimationSystem(QMainWindow):
         
         delete_selected_btn = QPushButton("删除选中")
         delete_selected_btn.setFixedHeight(30)
-        delete_selected_btn.setStyleSheet("QPushButton { background-color: #e74c3c; color: white; }")
+        delete_selected_btn.setStyleSheet(
+            "QPushButton { background-color: #e74c3c; color: white; }"
+        )
         delete_selected_btn.clicked.connect(self._delete_selected_view)
         
         list_btn_row.addWidget(load_selected_btn)
@@ -370,7 +403,7 @@ class HumanAnimationSystem(QMainWindow):
     
     def _clear_all_views(self):
         """清空所有保存的视角"""
-        from config import saved_views
+        global saved_views
         
         if not saved_views:
             return
@@ -387,8 +420,6 @@ class HumanAnimationSystem(QMainWindow):
     
     def _setup_single_frame_tab(self):
         """单帧控制 + 精准关节映射"""
-        from config import body_model
-        
         layout = QVBoxLayout(self.tab_single)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
@@ -407,7 +438,7 @@ class HumanAnimationSystem(QMainWindow):
         load_layout.addWidget(self.model_label, 2)
         layout.addWidget(load_group)
         
-        # 体型
+        # 体型参数
         shape_group = QGroupBox("体型参数 β₀")
         shape_layout = QHBoxLayout(shape_group)
         shape_layout.setContentsMargins(5, 5, 5, 5)
@@ -453,7 +484,9 @@ class HumanAnimationSystem(QMainWindow):
             slider.setRange(-90, 90)
             slider.setValue(val)
             slider.setFixedHeight(18)
-            slider.valueChanged.connect(lambda v, id=idx: self._update_joint(v, id))
+            slider.valueChanged.connect(
+                lambda v, id=idx: self._update_joint(v, id)
+            )
             value_label = QLabel("0°")
             value_label.setFixedWidth(35)
             self.core_sliders[idx] = slider
@@ -482,6 +515,7 @@ class HumanAnimationSystem(QMainWindow):
         dir_layout = QFormLayout()
         dir_layout.setContentsMargins(5, 5, 5, 5)
         dir_layout.setSpacing(5)
+        
         dir_hbox = QHBoxLayout()
         self.output_dir_edit = QLineEdit("./output_frames")
         self.output_dir_edit.setFixedHeight(30)
@@ -527,6 +561,7 @@ class HumanAnimationSystem(QMainWindow):
         anim_layout = QVBoxLayout(anim_group)
         anim_layout.setContentsMargins(5, 5, 5, 5)
         anim_layout.setSpacing(3)
+        
         hint = QLabel("勾选需要动画的参数并设置开始/结束值:")
         hint.setWordWrap(True)
         hint.setStyleSheet("QLabel { color: #666; }")
@@ -563,8 +598,8 @@ class HumanAnimationSystem(QMainWindow):
             name_lbl.setFixedWidth(40)
             start_box = QSpinBox()
             start_box.setRange(-180, 180)
-            start_box.setValue(_box.setFixedSize0)
-            start(60, 30)
+            start_box.setValue(0)
+            start_box.setFixedSize(60, 30)
             start_box.setSuffix("°")
             arrow_lbl = QLabel("→")
             arrow_lbl.setFixedWidth(20)
@@ -592,6 +627,7 @@ class HumanAnimationSystem(QMainWindow):
         self.progress_bar.setFixedHeight(25)
         self.progress_bar.setTextVisible(True)
         layout.addWidget(self.progress_bar)
+        
         self.anim_status_label = QLabel("就绪")
         self.anim_status_label.setAlignment(Qt.AlignCenter)
         self.anim_status_label.setFixedHeight(25)
@@ -602,7 +638,8 @@ class HumanAnimationSystem(QMainWindow):
         self.generate_btn = QPushButton("生成动画帧序列")
         self.generate_btn.setFixedHeight(40)
         self.generate_btn.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: white; font-weight: bold; font-size: 14px; }"
+            "QPushButton { background-color: #4CAF50; color: white; "
+            "font-weight: bold; font-size: 14px; }"
             "QPushButton:disabled { background-color: #cccccc; color: #666; }"
         )
         self.generate_btn.clicked.connect(self._generate_animation)
@@ -637,15 +674,15 @@ class HumanAnimationSystem(QMainWindow):
         ref_layout = QVBoxLayout(ref_group)
         ref_text = QLabel(
             "关节名称          ID    pose起始位  旋转轴  运动效果\n"
-            "──────────────────────────────────────────────────\n"
-            f"全局旋转          global  1(Y)      Y      水平旋转\n"
-            f"腰腹核心          spine1  3→12      Y      弯腰/扭腰 ✔️\n"
-            f"右髋关节          right_hip 2→9     Z      抬腿/扭胯 ✔️\n"
-            f"右膝关节          right_knee5→18    Z      屈膝/伸膝 ✔️\n"
-            f"右脚掌            right_foot11→36   Z      脚面旋转 ✔️\n"
-            f"右肩关节          right_shoulder17→54 X    抬肩/压肩 ✔️\n"
-            f"右肘关节          right_elbow19→60   X    屈肘/伸肘 ✔️\n"
-            f"胸椎              spine2  6→21     Y      挺胸/含胸\n"
+            "────────────────────────────────────────────────--\n"
+            "全局旋转          global  1(Y)      Y      水平旋转\n"
+            "腰腹核心          spine1  3→12      Y      弯腰/扭腰 ✔️\n"
+            "右髋关节          right_hip 2→9     Z      抬腿/扭胯 ✔️\n"
+            "右膝关节          right_knee5→18    Z      屈膝/伸膝 ✔️\n"
+            "右脚掌            right_foot11→36   Z      脚面旋转 ✔️\n"
+            "右肩关节          right_shoulder17→54 X    抬肩/压肩 ✔️\n"
+            "右肘关节          right_elbow19→60   X    屈肘/伸肘 ✔️\n"
+            "胸椎              spine2  6→21     Y      挺胸/含胸\n"
         )
         ref_text.setFont(QFont("Monospace", 9))
         ref_text.setWordWrap(False)
@@ -665,13 +702,15 @@ class HumanAnimationSystem(QMainWindow):
     
     def _browse_output_dir(self):
         """浏览选择输出目录"""
-        directory = QFileDialog.getExistingDirectory(self, "选择输出目录", "./", QFileDialog.ShowDirsOnly)
+        directory = QFileDialog.getExistingDirectory(
+            self, "选择输出目录", "./", QFileDialog.ShowDirsOnly
+        )
         if directory:
             self.output_dir_edit.setText(directory)
     
     def _load_smplx_model(self):
         """加载SMPLX模型"""
-        from config import body_model as bm
+        global body_model
         
         try:
             possible_paths = [
@@ -686,7 +725,6 @@ class HumanAnimationSystem(QMainWindow):
             for model_path in possible_paths:
                 if os.path.exists(model_path):
                     try:
-                        import smplx
                         body_model = smplx.create(
                             model_path=model_path,
                             model_type="smplx",
@@ -698,23 +736,25 @@ class HumanAnimationSystem(QMainWindow):
                         )
                         self.model_label.setText("已加载")
                         print(f"✓ 模型加载成功: {model_path}")
-                        
-                        # 更新config中的body_model
-                        import config
-                        config.body_model = body_model
-                        
                         model_loaded = True
                         
                         if hasattr(body_model, 'joint_mapper'):
                             mapper = body_model.joint_mapper
-                            mapper_info = "关节名称 -> ID -> pose起始位 -> 核心轴:\n"
+                            mapper_info = (
+                                "关节名称 -> ID -> pose起始位 -> 核心轴:\n"
+                            )
                             mapper_info += "-" * 70 + "\n"
-                            for name in sorted(mapper.keys(), key=lambda x: mapper[x]):
+                            for name in sorted(
+                                mapper.keys(), key=lambda x: mapper[x]
+                            ):
                                 idx = mapper[name]
                                 pose_idx = 3 + idx * 3
                                 axis = JOINT_AXIS_MAP.get(idx, 0)
                                 axis_name = {0: 'X', 1: 'Y', 2: 'Z'}[axis]
-                                mapper_info += f"  {name:20s} -> {idx:2d} -> {pose_idx:2d} -> {axis_name}\n"
+                                mapper_info += (
+                                    f"  {name:20s} -> {idx:2d} -> "
+                                    f"{pose_idx:2d} -> {axis_name}\n"
+                                )
                             self.mapper_text.setText(mapper_info)
                         break
                     except Exception as e:
@@ -722,7 +762,9 @@ class HumanAnimationSystem(QMainWindow):
                         continue
             
             if not model_loaded:
-                model_path = QFileDialog.getExistingDirectory(self, "选择SMPLX模型目录", "./", QFileDialog.ShowDirsOnly)
+                model_path = QFileDialog.getExistingDirectory(
+                    self, "选择SMPLX模型目录", "./", QFileDialog.ShowDirsOnly
+                )
                 if model_path:
                     body_model = smplx.create(
                         model_path=model_path,
@@ -734,9 +776,6 @@ class HumanAnimationSystem(QMainWindow):
                         device=device
                     )
                     self.model_label.setText("已加载(自定义)")
-                    
-                    import config
-                    config.body_model = body_model
                     model_loaded = True
             
             if model_loaded:
@@ -753,7 +792,7 @@ class HumanAnimationSystem(QMainWindow):
     
     def _update_shape(self, value):
         """更新体型参数"""
-        from config import shape_params
+        global shape_params
         
         shape_params[0, 0] = value
         self.shape_label.setText(str(value))
@@ -761,7 +800,7 @@ class HumanAnimationSystem(QMainWindow):
     
     def _update_joint(self, value, idx):
         """更新关节参数"""
-        from config import pose_params, JOINT_AXIS_MAP
+        global pose_params, JOINT_AXIS_MAP
         
         rad = value * np.pi / 180
         if idx == GLOBAL_ROTATION:
@@ -783,7 +822,7 @@ class HumanAnimationSystem(QMainWindow):
     
     def _reset_all(self):
         """重置所有参数，包括视角"""
-        from config import shape_params, pose_params
+        global shape_params, pose_params
         
         shape_params = torch.zeros(1, 10, device=device)
         pose_params = torch.zeros(1, 156, device=device)
@@ -797,19 +836,24 @@ class HumanAnimationSystem(QMainWindow):
         self.status_label.setText("状态: 已重置所有参数和视角")
     
     def _update_render(self):
-        """更新渲染"""
-        from config import body_model, shape_params, pose_params
-        from config import current_view_elev, current_view_azim, current_view_dist
+        """更新渲染（包含视角设置）"""
+        global body_model, shape_params, pose_params
+        global current_view_elev, current_view_azim, current_view_dist
         
+        # 清除并重新初始化坐标轴
         self.ax.clear()
         self._init_axes()
         
+        # 在初始化之后再设置视角，确保不被覆盖
         self.ax.view_init(elev=current_view_elev, azim=current_view_azim)
         if current_view_dist is not None:
             self.ax.dist = current_view_dist
         
         if body_model is None:
-            self.ax.text(0, 0, 1, "please load SMPLX model", ha="center", va="center", fontsize=14, color='red')
+            self.ax.text(
+                0, 0, 1, "please load SMPLX model",
+                ha="center", va="center", fontsize=14, color='red'
+            )
             self.canvas.draw()
             return
         
@@ -823,32 +867,50 @@ class HumanAnimationSystem(QMainWindow):
             )
             vertices = body_output.vertices.detach().cpu().numpy()[0]
             faces = body_model.faces
-            self.ax.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2],
-                                triangles=faces, alpha=0.7, color="#4682B4", linewidth=0, antialiased=True)
+            self.ax.plot_trisurf(
+                vertices[:, 0], vertices[:, 1], vertices[:, 2],
+                triangles=faces, alpha=0.7, color="#4682B4",
+                linewidth=0, antialiased=True
+            )
             joints = body_output.joints.detach().cpu().numpy()[0]
-            self.ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], c='red', s=20, alpha=1.0, label='joints')
+            self.ax.scatter(
+                joints[:, 0], joints[:, 1], joints[:, 2],
+                c='red', s=20, alpha=1.0, label='joints'
+            )
             focus_joints = {3: '腰', 2: '右髋', 5: '右膝', 11: '右脚', 17: '右肩'}
             for jid, name in focus_joints.items():
-                self.ax.text(joints[jid, 0], joints[jid, 1], joints[jid, 2], f'{name}\n{jid}', fontsize=9, color='yellow', ha='center')
+                self.ax.text(
+                    joints[jid, 0], joints[jid, 1], joints[jid, 2],
+                    f'{name}\n{jid}', fontsize=9, color='yellow', ha='center'
+                )
             self.ax.legend(loc='upper right')
             self.status_label.setText("状态: 渲染完成")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.ax.text(0, 0, 1, f"渲染错误: {e}", ha="center", va="center", fontsize=10, color='red')
+            self.ax.text(
+                0, 0, 1, f"渲染错误: {e}",
+                ha="center", va="center", fontsize=10, color='red'
+            )
         self.canvas.draw()
     
     def _draw_empty_hint(self):
         """绘制空提示"""
         self.ax.clear()
         self._init_axes()
-        self.ax.text(0, 0, 1, "please load SMPLX model", ha="center", va="center", fontsize=14, color='red')
+        # 设置初始视角
+        self.ax.view_init(elev=current_view_elev, azim=current_view_azim)
+        self.ax.dist = current_view_dist if current_view_dist else DEFAULT_DIST
+        self.ax.text(
+            0, 0, 1, "please load SMPLX model",
+            ha="center", va="center", fontsize=14, color='red'
+        )
         self.canvas.draw()
     
     def _generate_animation(self):
         """生成动画"""
-        from config import body_model, shape_params, pose_params
-        from config import current_view_elev, current_view_azim, current_view_dist
+        global body_model, shape_params, pose_params
+        global current_view_elev, current_view_azim, current_view_dist
         
         if body_model is None:
             QMessageBox.warning(self, "警告", "请先加载SMPLX模型!")
@@ -857,6 +919,7 @@ class HumanAnimationSystem(QMainWindow):
         output_path = self.output_dir_edit.text().strip()
         if not output_path:
             output_path = "./output_frames"
+        
         frames = self.frame_count.value()
         if frames < 1:
             QMessageBox.warning(self, "警告", "帧数必须大于0!")
@@ -865,6 +928,7 @@ class HumanAnimationSystem(QMainWindow):
         shape_start = self.anim_shape_start.value()
         shape_end = self.anim_shape_end.value()
         joint_configs = []
+        
         for name, idx, val in self.core_joints:
             if idx in self.anim_joint_widgets:
                 start_box, end_box, checkbox = self.anim_joint_widgets[idx]
@@ -888,21 +952,32 @@ class HumanAnimationSystem(QMainWindow):
         interpolation = "linear" if selected_id == 0 else "smooth"
         
         # 创建动画线程
-        self.animation_thread = AnimationWorker(frames, output_path, interpolation=interpolation)
+        self.animation_thread = AnimationWorker(
+            frames, output_path, interpolation=interpolation
+        )
         self.animation_thread.set_params(shape_start, shape_end, joint_configs)
         
         # 传递当前状态给动画线程
         self.animation_thread.set_state(shape_params, pose_params)
         
-        # 设置全局变量
-        from animation_worker import set_globals
-        set_globals(body_model, shape_params, pose_params, 
-                   current_view_elev, current_view_azim, current_view_dist)
+        # 设置全局变量供动画线程使用
+        set_globals(
+            body_model,
+            current_view_elev,
+            current_view_azim,
+            current_view_dist
+        )
         
         # 连接信号
-        self.animation_thread.progress_update.connect(self._on_animation_progress)
-        self.animation_thread.finished_signal.connect(self._on_animation_finished)
-        self.animation_thread.error_signal.connect(self._on_animation_error)
+        self.animation_thread.progress_update.connect(
+            self._on_animation_progress
+        )
+        self.animation_thread.finished_signal.connect(
+            self._on_animation_finished
+        )
+        self.animation_thread.error_signal.connect(
+            self._on_animation_error
+        )
         
         if self.generate_btn:
             self.generate_btn.setEnabled(False)
@@ -921,6 +996,7 @@ class HumanAnimationSystem(QMainWindow):
         self.anim_status_label.setText("完成!")
         if self.generate_btn:
             self.generate_btn.setEnabled(True)
+        
         reply = QMessageBox.question(
             self, "完成", f"动画帧已保存到:\n{output_path}\n是否打开文件夹?",
             QMessageBox.Yes | QMessageBox.No
